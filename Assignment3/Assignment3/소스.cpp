@@ -1,51 +1,33 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
-#include <cstdlib>
 #include <cmath>
-#include "Tokenizer.h"
+
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <string>
 #include <map>
 
+#include <set>
+#include <string.h>
+#include <conio.h>
+
+#include "Tokenizer.h"
+
 #pragma warning(disable:4996)
 
 using namespace std;
 
+#define BLOCKSIZE 4096
 #define DEGREE 510 // 3이상으로 할 것, 510이면 4096Byte로 설정됨
 #define MAX 30  // 메모리 해제하기 위한 스택크기 
 #define LEAF 1
 #define INDEX 2
 #define FULL 1
 #define EPS 0.000001
-#define BLOCKSIZE 4096
-
-typedef struct LEAF_NODE
-{
-	float key[DEGREE];
-	int data[DEGREE];
-	struct NODE *next;
-}LeafNode;
-
-typedef struct INDEX_NODE
-{
-	float key[DEGREE - 1];
-	struct NODE *pointer[DEGREE];
-}IndexNode;
-
-typedef struct NODE
-{
-	int type;
-	int full;
-	struct NODE *parent;
-	union
-	{
-		LeafNode leafNode;
-		IndexNode indexNode;
-	}node;
-}Node;
+#define INIT_GLOB_DEPTH 0
+#define SHOW_DUPLICATE_BUCKETS 0
 
 typedef struct _students
 {
@@ -71,6 +53,289 @@ typedef struct _block2
 {
 	Professors records[BLOCKSIZE / sizeof(Professors)];
 }Block2;
+
+typedef struct _hashMap {
+
+	int key;
+	int tableNum;
+
+}HashMap;
+
+class Bucket {
+
+private:
+	int hashPrefix, size;
+	map<int, int> hashTable;
+
+public:
+
+	Bucket(int hashPrefix, int size) {
+		this->hashPrefix = hashPrefix;
+		this->size = size;
+	}
+
+	int insert(int _key, int _blockNum) {
+		map<int, int>::iterator it;
+		it = hashTable.find(_key);
+		if (it != hashTable.end()) return -1;
+		else if (isFull()) return 0;
+		else {
+			hashTable[_key] = _blockNum;
+			return 1;
+		}
+	}
+
+	bool search(int key) {
+		map<int, int>::iterator it;
+		it = hashTable.find(key);
+		if (it != hashTable.end())
+			return true;
+		else    return false;
+	}
+
+	int isFull(void) {
+		if (hashTable.size() == size)
+			return 1;
+		else
+			return 0;
+	}
+
+	int isEmpty(void) {
+		if (hashTable.size() == 0)
+			return 1;
+		else
+			return 0;
+	}
+
+	int gethashTableize() {
+
+		return hashTable.size();
+	}
+
+	int getHashPrefix(void) {
+		return hashPrefix;
+	}
+
+	int increaseHashPrefix(void) {
+		hashPrefix++;
+		return hashPrefix;
+	}
+
+	int decreaseHashPrefix(void) {
+		hashPrefix--;
+		return hashPrefix;
+	}
+
+	map<int, int> copy(void) {
+		map<int, int> temp(hashTable.begin(), hashTable.end());
+		return temp;
+	}
+
+	void clear(void) {
+		hashTable.clear();
+	}
+
+	//insert values into Student.hash as binary format
+
+	int writeHashFile(FILE *& fout) {
+
+		map<int, int>::iterator it;
+		HashMap* hashMap = new HashMap[hashTable.size()];
+		int i = 0;
+		for (it = hashTable.begin(); it != hashTable.end(); it++) {
+
+			hashMap[i].key = it->first;
+			hashMap[i].tableNum = it->second;
+
+			i++;
+		}
+
+		fwrite((void*)hashMap, sizeof(HashMap), hashTable.size(), fout);
+		return 0;
+	}
+
+};
+
+
+class Directory {
+
+	int hashPrefix;
+	vector<Bucket*> buckets;
+
+	//증가된 hashPrefix맞게 버킷넘버 추가
+	int pairIndex(int bucketNum, int hashPrefix) {
+		return bucketNum ^ (1 << (hashPrefix - 1));
+	}
+
+	void grow(void) {
+		for (int i = 0; i < 1 << hashPrefix; i++)
+			buckets.push_back(buckets[i]);
+		hashPrefix++;
+	}
+
+	void shrink(void) {
+		int flag = 1, i;
+
+		for (i = 0; i < buckets.size(); i++) {
+			if (buckets[i]->getHashPrefix() == hashPrefix) {
+				flag = 0;
+				return;
+			}
+		}
+
+		hashPrefix--;
+		for (i = 0; i < 1 << hashPrefix; i++)
+			buckets.pop_back();
+	}
+
+	void split(int bucketNum) {
+		int local_depth, pair_index, index_diff, dir_size, i;
+		map<int, int> temp;
+		map<int, int>::iterator it;
+
+		local_depth = buckets[bucketNum]->increaseHashPrefix();
+		if (local_depth > hashPrefix)
+			grow();
+		pair_index = pairIndex(bucketNum, local_depth);
+		buckets[pair_index] = new Bucket(local_depth, BLOCKSIZE);
+		temp = buckets[bucketNum]->copy();
+		buckets[bucketNum]->clear();
+		index_diff = 1 << local_depth;
+		dir_size = 1 << hashPrefix;
+		for (i = pair_index - index_diff; i >= 0; i -= index_diff)
+			buckets[i] = buckets[pair_index];
+		for (i = pair_index + index_diff; i < dir_size; i += index_diff)
+			buckets[i] = buckets[pair_index];
+		for (it = temp.begin(); it != temp.end(); it++)
+			insert((*it).first, (*it).second, 1);
+	}
+
+	void merge(int bucketNum) {
+		int local_hashPrefix, extendedBucketNum, index_diff, dir_size, i;
+
+		local_hashPrefix = buckets[bucketNum]->getHashPrefix();
+		extendedBucketNum = pairIndex(bucketNum, local_hashPrefix);
+		index_diff = 1 << local_hashPrefix;
+		dir_size = 1 << hashPrefix;
+
+		if (buckets[extendedBucketNum]->getHashPrefix() == local_hashPrefix) {
+
+			buckets[extendedBucketNum]->decreaseHashPrefix();
+			delete(buckets[bucketNum]);
+			buckets[bucketNum] = buckets[extendedBucketNum];
+			for (i = bucketNum - index_diff; i >= 0; i -= index_diff)
+				buckets[i] = buckets[extendedBucketNum];
+			for (i = bucketNum + index_diff; i < dir_size; i += index_diff)
+				buckets[i] = buckets[extendedBucketNum];
+		}
+	}
+
+	string bucket_id(int n) {
+		int d;
+		string s;
+		d = buckets[n]->getHashPrefix();
+		s = "";
+		while (n > 0 && d > 0) {
+			s = (n % 2 == 0 ? "0" : "1") + s;
+			n /= 2;
+			d--;
+		}
+		while (d > 0) {
+			s = "0" + s;
+			d--;
+		}
+		return s;
+	}
+
+public:
+
+	Directory() {
+		this->hashPrefix = 0;
+		for (int i = 0; i < 1 << this->hashPrefix; i++) {
+			buckets.push_back(new Bucket(this->hashPrefix, BLOCKSIZE / sizeof(Students)));
+		}
+	}
+
+	int hash(int n) {
+		return n&((1 << hashPrefix) - 1);
+	}
+
+	void insert(int key, int bucketNum, bool reinserted) {
+
+		int cmpIdx = 0;
+
+		if (hashPrefix == 0) {
+
+		}
+		else {
+
+			for (int i = 0; i < hashPrefix; i++)
+				cmpIdx += pow(2, i);
+
+		}
+		int status = buckets[(key & cmpIdx)]->insert(key, bucketNum);
+
+		if (status == 0) {
+			split(bucketNum);
+			insert(key, bucketNum, reinserted);
+		}
+	}
+
+	bool search(int key) {
+		int bucketNum = hash(key);
+		return buckets[bucketNum]->search(key);
+	}
+
+	void display(bool duplicates) {
+
+	}
+
+	int writeHashFile(FILE *& fout, bool duplicates) {
+		fseek(fout, 0, SEEK_SET);
+		for (int i = 0; i < buckets.size(); i++)
+			buckets[i]->writeHashFile(fout);
+		return 0;
+	}
+
+};
+
+void readHashFile(HashMap*& readHashMap, int count) {
+
+	FILE *readHash = fopen("Students.hash", "rb");
+	fseek(readHash, 0, SEEK_SET);
+	fread((void*)readHashMap, sizeof(HashMap), count, readHash);
+
+	//print out readHashMap
+	for (int j = 0; j < count; j++) {
+		cout << readHashMap[j].key << " " << readHashMap[j].tableNum << endl;
+	}
+
+}
+
+typedef struct LEAF_NODE
+{
+	float key[DEGREE];
+	int data[DEGREE];
+	struct NODE *next;
+}LeafNode;
+
+typedef struct INDEX_NODE
+{
+	float key[DEGREE - 1];
+	struct NODE *pointer[DEGREE];
+}IndexNode;
+
+typedef struct NODE
+{
+	int type;
+	int full;
+	struct NODE *parent;
+	union
+	{
+		LeafNode leafNode;
+		IndexNode indexNode;
+	}node;
+}Node;
 
 typedef struct
 {
@@ -113,17 +378,33 @@ int writeIndexFile2(FILE *& fout);
 
 int main()
 {
-
+	int num;
 	initBPlusTree();
 
 	Block *readBlocks, *writeBlocks;
 	int count = getInputData(writeBlocks, "sampleData2.csv");
 	insertDB(writeBlocks, count);
 	int numOfRecords = BLOCKSIZE / sizeof(Students);
+
+	Directory directory; //hash directory initialization
+
 	FILE *readDB = fopen("Students.DB", "rb");
 	fseek(readDB, 0, SEEK_SET);
 	readBlocks = new Block[count / numOfRecords + 1];
 	fread((void*)readBlocks, sizeof(Block), count / numOfRecords + 1, readDB);
+
+	//studentID is key of Hash
+	//insert key value into hash table
+	for (int j = 0; j < count / numOfRecords + 1; j++) {
+		for (int i = 0; i < numOfRecords; i++) {
+			directory.insert(readBlocks[j].records[i].studentID, directory.hash(readBlocks[j].records[i].studentID), 0);
+		}
+	}
+
+	//make Students.hash
+	FILE *hashFile = fopen("Students.hash", "wb");
+	if (directory.writeHashFile(hashFile, SHOW_DUPLICATE_BUCKETS) == -1)
+		cout << ".hash file error." << endl;
 
 	//score is the key of B+tree
 	//insert <key, value> into index
@@ -138,10 +419,40 @@ int main()
 	if (writeIndexFile(indexFile) == -1)
 		cout << ".idx file error." << endl;
 
-	traverse();
+	HashMap* readHashMap = new HashMap[count];
+
+	while (1) {
+		cout << "Select your operation\n 1.show Students.hash\n 2.show all the leaves of Students_score.idx\n 3.Show your DB\n 4.exit..\n>>>>>>";
+		cin >> num;
+		switch (num) {
+
+		case 1:
+			//read values from Students.hash
+			readHashFile(readHashMap, count);
+			break;
+		case 2:
+			traverse();
+			break;
+		case 3:
+			for (int j = 0; j < count / numOfRecords + 1; j++) {
+				for (int i = 0; i < numOfRecords; i++) {
+					if (strcmp(readBlocks[j].records[i].name, ""))
+						cout << readBlocks[j].records[i].name << " " << readBlocks[j].records[i].studentID << " "
+						<< readBlocks[j].records[i].score << " " << readBlocks[j].records[i].advisorID << endl;
+				}
+			}
+			break;
+		case 4:
+			return 0;
+			break;
+		default:
+			cout << "Not valid operation number!\n";
+		}
+
+		cout << endl;
+	}
 
 	system("pause");
-	//Free(root);
 	return 0;
 }
 
@@ -1094,3 +1405,7 @@ int writeIndexFile2(FILE *& fout)
 //{
 //	InsertKey(in[i], 999);
 //}
+
+
+
+//Free(root);
