@@ -331,6 +331,10 @@ typedef struct
 }IndexMap;
 
 
+int numOfStudentRecords = BLOCKSIZE / sizeof(Students);
+int numOfProfessorRecords = BLOCKSIZE / sizeof(Professors);
+
+
 
 Node * root;
 Node * root2;
@@ -420,18 +424,17 @@ void readProfessorIndexFile(Node*& salary, int count) {
 
 void insertStudentDB(StudentBlock*& blocks, int count) {
 	//insert hashTable into DB as binary format
-	int numOfRecords = BLOCKSIZE / sizeof(Students);
 	FILE * DBFile = fopen("Students.DB", "wb");
 	fseek(DBFile, 0, SEEK_SET);
-	fwrite((char*)blocks, sizeof(StudentBlock), count / numOfRecords + 1, DBFile);
+	int j = fwrite((char*)blocks, sizeof(StudentBlock), count / numOfStudentRecords + 1, DBFile);
 }
 
 void insertProfessorDB(ProfessorBlock*& blocks, int count) {
+
 	//insert hashTable into DB as binary format
-	int numOfRecords = BLOCKSIZE / sizeof(Professors);
 	FILE * DBFile = fopen("Professors.DB", "wb");
 	fseek(DBFile, 0, SEEK_SET);
-	fwrite((char*)blocks, sizeof(ProfessorBlock), count / numOfRecords + 1, DBFile);
+	int k = fwrite((char*)blocks, sizeof(ProfessorBlock), count / numOfProfessorRecords + 2, DBFile);
 }
 
 int getStudentData(StudentBlock*& blocks, string input_str) {
@@ -440,17 +443,16 @@ int getStudentData(StudentBlock*& blocks, string input_str) {
 	ifstream input_data(input_str.c_str());
 	string buf;
 	Tokenizer tokenizer; //include "Tokenize.h"
-	int numOfRecords = BLOCKSIZE / sizeof(Students);
 	tokenizer.setDelimiter(","); //parsing Delimiter = ","
 	getline(input_data, buf);
 	tokenizer.setString(buf);
 	int count = atoi(tokenizer.next().c_str()); //the num of Students
 
-	blocks = new StudentBlock[count / numOfRecords + 1];
+	blocks = new StudentBlock[count / numOfStudentRecords + 1];
 
 	//initialize blocks
-	for (int j = 0; j < count / numOfRecords + 1; j++) {
-		for (int i = 0; i < numOfRecords; i++) {
+	for (int j = 0; j < count / numOfStudentRecords + 1; j++) {
+		for (int i = 0; i < numOfStudentRecords; i++) {
 			strcpy(blocks[j].records[i].name, "");
 			blocks[j].records[i].studentID = 0;
 			blocks[j].records[i].score = 0;
@@ -459,8 +461,8 @@ int getStudentData(StudentBlock*& blocks, string input_str) {
 	}
 
 	//read inputFile and then put value into blocks
-	for (int j = 0; j < count / numOfRecords + 1; j++) {
-		for (int i = 0; i < numOfRecords; i++) {
+	for (int j = 0; j < count / numOfStudentRecords + 1; j++) {
+		for (int i = 0; i < numOfStudentRecords; i++) {
 
 			string temp;
 			getline(input_data, buf);
@@ -483,17 +485,16 @@ int getProfessorData(ProfessorBlock*& blocks, string input_str) {
 	ifstream input_data(input_str.c_str());
 	string buf;
 	Tokenizer tokenizer; //include "Tokenize.h"
-	int numOfRecords = BLOCKSIZE / sizeof(Professors);
 	tokenizer.setDelimiter(","); //parsing Delimiter = ","
 	getline(input_data, buf);
 	tokenizer.setString(buf);
 	int count = atoi(tokenizer.next().c_str()); //the num of Professors
 
-	blocks = new ProfessorBlock[count / numOfRecords + 1];
+	blocks = new ProfessorBlock[count / numOfProfessorRecords + 1];
 
 	//initialize blocks
-	for (int j = 0; j < count / numOfRecords + 1; j++) {
-		for (int i = 0; i < numOfRecords; i++) {
+	for (int j = 0; j < count / numOfProfessorRecords + 1; j++) {
+		for (int i = 0; i < numOfProfessorRecords; i++) {
 			strcpy(blocks[j].records[i].name, "");
 			blocks[j].records[i].professorID = 0;
 			blocks[j].records[i].salary = 0;
@@ -501,8 +502,8 @@ int getProfessorData(ProfessorBlock*& blocks, string input_str) {
 	}
 
 	//read inputFile and then put value into blocks
-	for (int j = 0; j < count / numOfRecords + 1; j++) {
-		for (int i = 0; i < numOfRecords; i++) {
+	for (int j = 0; j < count / numOfProfessorRecords + 1; j++) {
+		for (int i = 0; i < numOfProfessorRecords; i++) {
 
 			string temp;
 			getline(input_data, buf);
@@ -567,24 +568,25 @@ int main()
 
 	StudentBlock *readStudentBlocks, *writeStudentBlocks;
 	ProfessorBlock *readProfessorBlocks, *writeProfessorBlocks;
-	int studentCnt = getStudentData(writeStudentBlocks, "student_data2.csv");
-	int professorCnt = getProfessorData(writeProfessorBlocks, "prof_data2.csv");
+	int studentCnt = getStudentData(writeStudentBlocks, "student_data.csv");
+	int professorCnt = getProfessorData(writeProfessorBlocks, "prof_data.csv");
 	insertStudentDB(writeStudentBlocks, studentCnt);
 	insertProfessorDB(writeProfessorBlocks, professorCnt);
-	int numOfStudentRecords = BLOCKSIZE / sizeof(Students);
-	int numOfProfessorRecords = BLOCKSIZE / sizeof(Professors);
+
 
 	Directory directory; //hash directory initialization
 
 	FILE *readStudentDB = fopen("Students.DB", "rb");
 	fseek(readStudentDB, 0, SEEK_SET);
 	readStudentBlocks = new StudentBlock[studentCnt / numOfStudentRecords + 1];
-	fread((void*)readStudentBlocks, sizeof(StudentBlock), studentCnt / numOfStudentRecords + 1, readStudentDB);
+
+	int j = fread((char*)readStudentBlocks, sizeof(StudentBlock), studentCnt / numOfStudentRecords + 1, readStudentDB);
 
 	FILE *readProfessorDB = fopen("Professors.DB", "rb");
 	fseek(readProfessorDB, 0, SEEK_SET);
-	readProfessorBlocks = new ProfessorBlock[professorCnt / numOfProfessorRecords + 1];
-	fread((void*)readProfessorBlocks, sizeof(ProfessorBlock), professorCnt / numOfProfessorRecords + 1, readProfessorDB);
+	readProfessorBlocks = new ProfessorBlock[professorCnt / numOfProfessorRecords + 2];
+
+	int k = fread((char*)readProfessorBlocks, sizeof(ProfessorBlock), professorCnt / numOfProfessorRecords + 2, readProfessorDB);
 
 
 	//studentID is key of Hash
@@ -628,7 +630,7 @@ int main()
 
 	//salary is the key of B+tree
 	//insert <key, value> into index
-	for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
+	for (int j = 0; j < professorCnt / numOfProfessorRecords + 2; j++) {
 		for (int i = 0; i < numOfProfessorRecords; i++) {
 			InsertKey(readProfessorBlocks[j].records[i].salary, j, root2);
 		}
