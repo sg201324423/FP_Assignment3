@@ -605,39 +605,28 @@ void exactSearch(Directory directory, int key, int hashMapSize, string type){
 
 		}
 		else if (type == "Professors") {
-			
+
 			for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
 				for (int i = 0; i < numOfProfessorRecords; i++) {
 
 					if (readProfessorBlocks[j].records[i].professorID == it->first) {
 						cout << readProfessorBlocks[j].records[i].name << " " << readProfessorBlocks[j].records[i].professorID << " "
-							<< readProfessorBlocks[j].records[i].salary <<  endl;
+							<< readProfessorBlocks[j].records[i].salary << endl;
 					}
 
 				}
 			}
 
 		}
-		else {
-
-			
-		}
-		
-		
 	}
-	else // 없을 때
-	{
-
-	}
-	
-
 
 }
 
 
 //인덱스파일
-void rangeSearch(Node*& root, float from, float to) {
+void rangeSearch(Node*& root, float from, float to, string type) {
 
+	
 
 
 }
@@ -826,7 +815,6 @@ int main()
 					string type = tokenizer.next();
 					tokenizer.next();
 					if (type == "Students") {
-					
 						exactSearch(studentDirectory, atoi(tokenizer.next().c_str()), studentCnt, "Students");
 					}
 					else if (type == "Professors") {
@@ -834,7 +822,14 @@ int main()
 					}
 				}
 				else if (tokenizer.next() == "Search-Range") {
-
+					string type = tokenizer.next();
+					tokenizer.next();
+					if (type == "Students") {
+						rangeSearch(root, atoi(tokenizer.next().c_str()), atoi(tokenizer.next().c_str()), "Students");
+					}
+					else if (type == "Professors") {
+						rangeSearch(root2, atoi(tokenizer.next().c_str()), atoi(tokenizer.next().c_str()), "Professors");
+					}
 				}
 				else if (tokenizer.next() == "Join") {
 
