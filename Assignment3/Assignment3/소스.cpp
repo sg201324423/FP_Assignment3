@@ -41,6 +41,7 @@ typedef struct _professors
 	int salary;
 }Professors;
 
+
 typedef struct student_block
 {
 	Students records[BLOCKSIZE / sizeof(Students)];
@@ -59,13 +60,16 @@ typedef struct _hashMap {
 }HashMap;
 
 
+int studentCnt, professorCnt;
+
+StudentBlock *readStudentBlocks, *writeStudentBlocks;
+ProfessorBlock *readProfessorBlocks, *writeProfessorBlocks;
+
 class Bucket {
 
-private:
+public:
 	int hashPrefix, size;
 	map<int, int> hashTable;
-
-public:
 
 	Bucket(int hashPrefix, int size) {
 		this->hashPrefix = hashPrefix;
@@ -76,7 +80,8 @@ public:
 		map<int, int>::iterator it;
 		it = hashTable.find(_key);
 		if (it != hashTable.end()) return -1;
-		else if (isFull()) return 0;
+		else if (isFull()) 
+			return 0;
 		else {
 			hashTable[_key] = _blockNum;
 			return 1;
@@ -140,6 +145,8 @@ public:
 		map<int, int>::iterator it;
 		HashMap* hashMap = new HashMap[hashTable.size()];
 		int i = 0;
+		
+
 		for (it = hashTable.begin(); it != hashTable.end(); it++) {
 
 			hashMap[i].key = it->first;
@@ -148,7 +155,7 @@ public:
 			i++;
 		}
 
-		fwrite((void*)hashMap, sizeof(HashMap), hashTable.size(), fout);
+		fwrite((void*)hashMap, sizeof(HashMap), this->gethashTableize(), fout);
 		return 0;
 	}
 
@@ -156,7 +163,7 @@ public:
 
 
 class Directory {
-
+public:
 	int hashPrefix;
 	vector<Bucket*> buckets;
 
@@ -166,7 +173,7 @@ class Directory {
 	}
 
 	void grow(void) {
-		for (int i = 0; i < 1 << hashPrefix; i++)
+		for (int i = 0; i < 1 << hashPrefix ; i++)
 			buckets.push_back(buckets[i]);
 		hashPrefix++;
 	}
@@ -245,17 +252,16 @@ class Directory {
 		return s;
 	}
 
-public:
 
-	Directory() {
+	Directory(int size) {
 		this->hashPrefix = 0;
 		for (int i = 0; i < 1 << this->hashPrefix; i++) {
-			buckets.push_back(new Bucket(this->hashPrefix, BLOCKSIZE / sizeof(Students)));
+			buckets.push_back(new Bucket(this->hashPrefix, BLOCKSIZE / size));
 		}
 	}
 
 	int hash(int n) {
-		return n&((1 << hashPrefix) - 1);
+		return n & ((1 << hashPrefix) -1);
 	}
 
 	void insert(int key, int bucketNum, bool reinserted) {
@@ -272,6 +278,7 @@ public:
 
 		}
 		int status = buckets[(key & cmpIdx)]->insert(key, bucketNum);
+
 
 		if (status == 0) {
 			split(bucketNum);
@@ -437,6 +444,11 @@ void insertProfessorDB(ProfessorBlock*& blocks, int count) {
 	int k = fwrite((char*)blocks, sizeof(ProfessorBlock), count / numOfProfessorRecords + 2, DBFile);
 }
 
+
+
+
+
+
 int getStudentData(StudentBlock*& blocks, string input_str) {
 
 	//Get input data from .csv
@@ -559,6 +571,107 @@ int writeProfessorIndexFile(FILE *& fout)
 	return 0;
 }
 
+
+
+
+//해시파일
+void exactSearch(Directory directory, int key, int hashMapSize, string type){
+
+	map<int, int>::iterator it;
+	int bucketNum = directory.hash(key);
+
+
+	map<int, int> hashTable = directory.buckets[bucketNum]->hashTable;
+	it = hashTable.find(key);
+
+	if (it != hashTable.end()) // 찾았을 경우
+	{
+
+		printf("%d %d\n", it->first, it->second);
+		FILE * fin;
+		if (type == "Students") {
+
+
+			for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
+				for (int i = 0; i < numOfStudentRecords; i++) {
+
+					if (readStudentBlocks[j].records[i].studentID == it->first) {
+						cout << readStudentBlocks[j].records[i].name << " " << readStudentBlocks[j].records[i].studentID << " "
+							<< readStudentBlocks[j].records[i].score << " " << readStudentBlocks[j].records[i].advisorID << endl;
+					}
+
+				}
+			}
+
+		}
+		else if (type == "Professors") {
+			
+			for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
+				for (int i = 0; i < numOfProfessorRecords; i++) {
+
+					if (readProfessorBlocks[j].records[i].professorID == it->first) {
+						cout << readProfessorBlocks[j].records[i].name << " " << readProfessorBlocks[j].records[i].professorID << " "
+							<< readProfessorBlocks[j].records[i].salary <<  endl;
+					}
+
+				}
+			}
+
+		}
+		else {
+
+			
+		}
+		
+		
+	}
+	else // 없을 때
+	{
+
+	}
+	
+
+
+}
+
+
+//인덱스파일
+void rangeSearch(Node*& root, float from, float to) {
+
+
+
+}
+
+
+//db파일????
+void join() {
+
+
+
+}
+
+
+int getQueryData(string*& querySet) {
+
+	ifstream input_data("query.input");
+	string buf;
+	Tokenizer tokenizer; //include "Tokenize.h"
+	tokenizer.setDelimiter(","); //parsing Delimiter = ","
+	getline(input_data, buf);
+	tokenizer.setString(buf);
+	int count = atoi(tokenizer.next().c_str()); //the num of Students
+	querySet = new string[count];
+	for (int i = 0; i < count; i++) {
+			if (input_data.eof()) break;
+			getline(input_data, buf);
+			querySet[i] = buf;
+	}
+
+	return count;
+}
+
+
+
 int main()
 {
 	int num;
@@ -566,55 +679,65 @@ int main()
 	initBPlusTree2();
 	initStack();
 
-	StudentBlock *readStudentBlocks, *writeStudentBlocks;
-	ProfessorBlock *readProfessorBlocks, *writeProfessorBlocks;
-	int studentCnt = getStudentData(writeStudentBlocks, "student_data.csv");
-	int professorCnt = getProfessorData(writeProfessorBlocks, "prof_data.csv");
+	studentCnt = getStudentData(writeStudentBlocks, "student_data.csv");
+	professorCnt = getProfessorData(writeProfessorBlocks, "prof_data.csv");
 	insertStudentDB(writeStudentBlocks, studentCnt);
 	insertProfessorDB(writeProfessorBlocks, professorCnt);
 
+	string* querySet;
+	int queryCnt = getQueryData(querySet);
 
-	Directory directory; //hash directory initialization
+	string buf;
+	Tokenizer tokenizer; //include "Tokenize.h"
+	tokenizer.setDelimiter(", "); //parsing Delimiter = ","
+	
+
+	Directory studentDirectory(sizeof(Students)), professorDirectory(sizeof(Professors)); //hash directory initialization
 
 	FILE *readStudentDB = fopen("Students.DB", "rb");
 	fseek(readStudentDB, 0, SEEK_SET);
 	readStudentBlocks = new StudentBlock[studentCnt / numOfStudentRecords + 1];
 
-	int j = fread((char*)readStudentBlocks, sizeof(StudentBlock), studentCnt / numOfStudentRecords + 1, readStudentDB);
+	fread((char*)readStudentBlocks, sizeof(StudentBlock), studentCnt / numOfStudentRecords + 1, readStudentDB);
 
 	FILE *readProfessorDB = fopen("Professors.DB", "rb");
 	fseek(readProfessorDB, 0, SEEK_SET);
 	readProfessorBlocks = new ProfessorBlock[professorCnt / numOfProfessorRecords + 2];
 
-	int k = fread((char*)readProfessorBlocks, sizeof(ProfessorBlock), professorCnt / numOfProfessorRecords + 2, readProfessorDB);
-
+	fread((char*)readProfessorBlocks, sizeof(ProfessorBlock), professorCnt / numOfProfessorRecords + 2, readProfessorDB);
+	
 
 	//studentID is key of Hash
 	//insert key value into hash table
-	for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
+	for (int j = 0; j < studentCnt/numOfStudentRecords + 1; j++) {
 		for (int i = 0; i < numOfStudentRecords; i++) {
-			directory.insert(readStudentBlocks[j].records[i].studentID, directory.hash(readStudentBlocks[j].records[i].studentID), 0);
+			int hashRes = studentDirectory.hash(readStudentBlocks[j].records[i].studentID);
+			studentDirectory.insert(readStudentBlocks[j].records[i].studentID, hashRes, 0);
 		}
 	}
+
+
+
 
 	//professorID is key of Hash
 	//insert key value into hash table
 	for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
 		for (int i = 0; i < numOfProfessorRecords; i++) {
-			directory.insert(readProfessorBlocks[j].records[i].professorID, directory.hash(readProfessorBlocks[j].records[i].professorID), 0);
+			professorDirectory.insert(readProfessorBlocks[j].records[i].professorID, professorDirectory.hash(readProfessorBlocks[j].records[i].professorID), 0);
 		}
 	}
 
 
 	//make Students.hash
 	FILE *studentHashFile = fopen("Students.hash", "wb");
-	if (directory.writeHashFile(studentHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
+	if (studentDirectory.writeHashFile(studentHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
 		cout << "students.hash file error." << endl;
 
+	
 
 	//make Professor.hash
 	FILE *professorHashFile = fopen("Professors.hash", "wb");
-	if (directory.writeHashFile(professorHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
+	if (professorDirectory.writeHashFile(professorHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
 		cout << "professor.hash file error." << endl;
 
 
@@ -655,9 +778,10 @@ int main()
 	Node* readStudentScoreIdx = new Node[DEGREE];
 	Node* readProfessorSalaryIdx = new Node[DEGREE];
 
+	
 	while (1) {
 		cout << "Select your operation\n 1.Show Students.hash\n 2.Show all the leaves of Students_score.idx\n 3.Show Stuents.DB\n"
-			<< " 4.Show Professors.hash\n 5.Show all the leaves of professor_score.idx\n 6.Show Professor.DB\n 7.exit..\n>>>>>>";
+			<< " 4.Show Professors.hash\n 5.Show all the leaves of professor_salary.idx\n 6.Show Professor.DB\n 7.Read Query File\n 8.exit..\n>>>>>>";
 		cin >> num;
 		switch (num) {
 
@@ -695,8 +819,29 @@ int main()
 				}
 			}
 			break;
-
 		case 7:
+			for (int i = 0; i < queryCnt; i++) {
+				tokenizer.setString(querySet[i]);
+				if (tokenizer.next() == "Search-Exact") {
+					string type = tokenizer.next();
+					tokenizer.next();
+					if (type == "Students") {
+					
+						exactSearch(studentDirectory, atoi(tokenizer.next().c_str()), studentCnt, "Students");
+					}
+					else if (type == "Professors") {
+						exactSearch(professorDirectory, atoi(tokenizer.next().c_str()), professorCnt, "Professors");
+					}
+				}
+				else if (tokenizer.next() == "Search-Range") {
+
+				}
+				else if (tokenizer.next() == "Join") {
+
+				}
+			}
+			break;
+		case 8:
 			return 0;
 			break;
 		default:
@@ -975,7 +1120,6 @@ void InsertKey1(float insertKey, int insertData, Node *thisNode, Node *root)
 	// thisNode 가 NULL 일 때 종료
 	if (thisNode == NULL)
 	{
-		printf("키가 중복 됩니다..\n");
 		return;
 	}
 	// 노드가 가득 차있으면 InsertKey2 실행
@@ -1023,38 +1167,6 @@ void initStack()
 		Stack[i] = NULL;
 	StackPoint = 0;
 }
-//void Free(Node *thisNode)
-//{
-//	/*
-//	메모리를 전부 해제하는 함수
-//	Stack 을 이용하여 malloc 함수로 만들어진 모든 메모리를 해제한다.
-//	*/
-//	int i;
-//	initStack();
-//	if (thisNode->type == LEAF)
-//	{
-//		free(thisNode);
-//		return;
-//	}
-//	for (i = 0; i<DEGREE; i++)
-//		if (thisNode->node.indexNode.pointer[i] != NULL)
-//			addStack(root->node.indexNode.pointer[i]);
-//	free(thisNode);
-//	while ((thisNode = getStack()) != NULL)
-//	{
-//		if (thisNode->type == LEAF)
-//			free(thisNode);
-//		else
-//		{
-//			for (i = 0; i<DEGREE; i++)
-//			{
-//				if (thisNode->node.indexNode.pointer[i] != NULL)
-//					addStack(thisNode->node.indexNode.pointer[i]);
-//			}
-//			free(thisNode);
-//		}
-//	}
-//}
 void DeleteKey2(Node *thisNode)
 {
 	/*
